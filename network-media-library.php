@@ -225,11 +225,7 @@ add_action( 'parse_request', function() {
 		return;
 	}
 
-	if ( ! function_exists( 'get_current_screen' ) || ! get_current_screen() ) {
-		return;
-	}
-
-	if ( 'upload' !== get_current_screen()->id ){
+	if ( ! function_exists( 'get_current_screen' ) || 'upload' !== get_current_screen()->id ) {
 		return;
 	}
 
@@ -418,7 +414,7 @@ class ACF_Value_Filter {
 	 *
 	 * @var mixed Field value.
 	 */
-	protected $value = [];
+	protected $value = null;
 
 	/**
 	 * Sets up the necessary action and filter callbacks.
@@ -461,7 +457,7 @@ class ACF_Value_Filter {
 			restore_current_blog();
 		}
 
-		$this->value[ $field['name'] ] = $image;
+		$this->value[$field['name']] = $image;
 
 		return $image;
 	}
@@ -476,7 +472,6 @@ class ACF_Value_Filter {
 	 */
 	public function filter_acf_attachment_format_value( $value, $post_id, array $field ) {
 		$value = $this->value[ $field['name'] ] ?? $value;
-		$this->value[ $field['name'] ] = null;
 		return $value;
 	}
 }
