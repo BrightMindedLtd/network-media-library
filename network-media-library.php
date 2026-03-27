@@ -454,10 +454,11 @@ class ACF_Value_Filter {
 					break;
 			}
 
+			$this->value[ $field['name'] ] = $image;
+
 			restore_current_blog();
 		}
 
-		$this->value[$field['name']] = $image;
 
 		return $image;
 	}
