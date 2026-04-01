@@ -56,6 +56,28 @@ if ( ! is_multisite() ) {
 const SITE_ID = 2;
 
 /**
+ * wp_get_attachment_url does not have the necessary filters to be supported transparently.
+ * This is an appropriate wrapper function, which correctly reads from the media site.
+ *
+ * @see https://github.com/humanmade/network-media-library/issues/15
+ * @param int $attachment_id
+ * @return string|false
+ */
+function wp_get_attachment_url( $attachment_id = 0 ) {
+	$value = null;
+
+	if ( ! is_media_site() && ! is_admin() ) {
+		switch_to_media_site();
+		$value = \wp_get_attachment_url( $attachment_id );
+		restore_current_blog();
+	} else {
+		$value = \wp_get_attachment_url( $attachment_id );
+	}
+
+	return $value;
+}
+
+/**
  * Returns the ID of the site which acts as the network media library.
  *
  * @return int The network media library site ID.
