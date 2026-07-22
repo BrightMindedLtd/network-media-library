@@ -545,6 +545,54 @@ class ACF_Field_Rendering {
 new ACF_Field_Rendering();
 
 /**
+ * ACF gallery support
+ */
+class ACF_Gallery_Support {
+
+	/**
+	 * Stored the site switching state between instances of fields.
+	 *
+	 * @var bool Whether the previous field triggered a switch to the central media site.
+	 */
+	protected $switched = false;
+
+	/**
+	 * Sets up the necessary action and filter callbacks.
+	 */
+	public function __construct() {
+		add_action( 'acf/format_value', [ $this, 'maybe_restore_current_blog' ], -999 );
+		add_action( 'acf/format_value/type=gallery', [ $this, 'maybe_switch_to_media_site' ], 0 );
+
+		add_action( 'acf/render_field', [ $this, 'maybe_restore_current_blog' ], -999 );
+		add_action( 'acf/render_field/type=gallery', [ $this, 'maybe_switch_to_media_site' ], 0 );
+	}
+
+	/**
+	 * Switches to the central media site.
+	 */
+	public function maybe_switch_to_media_site($value) {
+		$this->switched = true;
+
+		switch_to_media_site();
+		return $value;
+	}
+
+	/**
+	 * Switches back to the current site if the previous field triggered a switch to the central media site.
+	 */
+	public function maybe_restore_current_blog($value) {
+		if ( ! empty( $this->switched ) ) {
+			restore_current_blog();
+		}
+
+		$this->switched = false;
+		return $value;
+	}
+}
+
+new ACF_Gallery_Support();
+
+/**
  * A class which handles saving the post's featured image ID.
  *
  * This handling is required because `wp_insert_post()` checks the validity of the featured image
