@@ -560,8 +560,8 @@ class ACF_Gallery_Support {
 	 * Sets up the necessary action and filter callbacks.
 	 */
 	public function __construct() {
-		add_filter( 'acf/format_value/type=gallery', [ $this, 'maybe_switch_to_media_site' ], 0, 4 );
-		add_filter( 'acf/format_value/type=gallery', [ $this, 'maybe_restore_current_blog' ], 9999, 4 );
+		add_filter( 'acf/format_value/type=gallery', [ $this, 'maybe_switch_to_media_site' ], 0 );
+		add_filter( 'acf/format_value/type=gallery', [ $this, 'maybe_restore_current_blog' ], 9999 );
 
 		add_action( 'acf/render_field/type=gallery', [ $this, 'maybe_switch_to_media_site' ], 0 );
 		add_action( 'acf/render_field/type=gallery', [ $this, 'maybe_restore_current_blog' ], 9999 );
