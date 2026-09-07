@@ -64,15 +64,24 @@ const SITE_ID = 2;
  * @return string|false
  */
 function wp_get_attachment_url( $attachment_id = 0 ) {
-	$value = null;
+	static $cache = [];
 
-	if ( ! is_media_site() && ! is_admin() ) {
+	// Memoized per request: avoids a repeat switch_to_blog() for the same attachment.
+	if ( array_key_exists( $attachment_id, $cache ) ) {
+		return $cache[ $attachment_id ];
+	}
+
+	// If the attachment's posts/post_meta cache was already primed locally (see the
+	// wp_get_attachment_image_src filter below), this resolves correctly with no switch at all.
+	$value = ( ! is_media_site() ) ? \wp_get_attachment_url( $attachment_id ) : false;
+
+	if ( ! $value && ! is_media_site() && ! is_admin() ) {
 		switch_to_media_site();
 		$value = \wp_get_attachment_url( $attachment_id );
 		restore_current_blog();
-	} else {
-		$value = \wp_get_attachment_url( $attachment_id );
 	}
+
+	$cache[ $attachment_id ] = $value;
 
 	return $value;
 }
@@ -184,6 +193,14 @@ function admin_post_thumbnail_html( string $content, $post_id, $thumbnail_id ) :
 /**
  * Filters the image src result so its URL points to the network media library site.
  *
+ * A failed local get_post()/get_post_meta() lookup for a network-library attachment is never
+ * cached by WordPress core, so every request for a *different* size of the same image (e.g. a
+ * responsive srcset, or several core sizes across a page) used to pay for its own
+ * switch_to_blog()/restore_current_blog() round trip. Instead, the first time an attachment is
+ * seen this request, its real posts + post_meta rows are fetched once and cached locally under
+ * the current site - after that, core can resolve any size for that attachment entirely from
+ * local cache, with no further switching.
+ *
  * @param array|false  $image         Either array with src, width & height, icon src, or false.
  * @param int          $attachment_id Image attachment ID.
  * @param string|array $size          Size of image. Image size or array of width and height values.
@@ -192,8 +209,9 @@ function admin_post_thumbnail_html( string $content, $post_id, $thumbnail_id ) :
  */
 add_filter( 'wp_get_attachment_image_src', function( $image, $attachment_id, $size, bool $icon ) {
 	static $switched = false;
+	static $primed = [];
 
-	if ( $switched ) {
+	if ( $switched || $image ) {
 		return $image;
 	}
 
@@ -201,6 +219,29 @@ add_filter( 'wp_get_attachment_image_src', function( $image, $attachment_id, $si
 		return $image;
 	}
 
+	if ( ! isset( $primed[ $attachment_id ] ) ) {
+		$primed[ $attachment_id ] = true;
+
+		switch_to_media_site();
+		$switched = true;
+
+		$post = get_post( $attachment_id );
+		$meta_cache = update_meta_cache( 'post', [ $attachment_id ] );
+
+		$switched = false;
+		restore_current_blog();
+
+		if ( $post instanceof \WP_Post ) {
+			wp_cache_add( $attachment_id, $post, 'posts' );
+		}
+
+		wp_cache_add( $attachment_id, $meta_cache[ $attachment_id ] ?? [], 'post_meta' );
+
+		// Local cache is now primed; let core resolve this (and any other) size from it.
+		return wp_get_attachment_image_src( $attachment_id, $size, $icon );
+	}
+
+	// Already primed this request but core still couldn't resolve it locally - fall back.
 	switch_to_media_site();
 
 	$switched = true;
@@ -456,15 +497,29 @@ class ACF_Value_Filter {
 	/**
 	 * Fiters the return value when using field retrieval functions in Advanced Custom Fields.
 	 *
+	 * Memoized per request per (value, return_format) so the same attachment referenced by
+	 * several ACF fields (e.g. a shared icon reused across many blocks) only pays for one
+	 * switch_to_blog()/restore_current_blog() round trip.
+	 *
 	 * @param mixed      $value   The field value.
 	 * @param int|string $post_id The post ID for this value.
 	 * @param array      $field   The field array.
 	 * @return mixed The updated value.
 	 */
 	public function filter_acf_attachment_load_value( $value, $post_id, array $field ) {
+		static $cache = [];
+
 		$image = $value;
+		$cache_key = $value . ':' . $field['return_format'];
 
 		if ( ! is_media_site() && ! is_admin() ) {
+			if ( array_key_exists( $cache_key, $cache ) ) {
+				$image = $cache[ $cache_key ];
+				$this->value[ $field['name'] ] = $image;
+
+				return $image;
+			}
+
 			switch_to_media_site();
 
 			switch ( $field['return_format'] ) {
@@ -477,6 +532,7 @@ class ACF_Value_Filter {
 			}
 
 			$this->value[ $field['name'] ] = $image;
+			$cache[ $cache_key ]           = $image;
 
 			restore_current_blog();
 		}
