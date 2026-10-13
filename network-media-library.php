@@ -211,7 +211,7 @@ add_filter( 'wp_get_attachment_image_src', function( $image, $attachment_id, $si
 	static $switched = false;
 	static $primed = [];
 
-	if ( $switched || $image ) {
+	if ( $switched || !empty( $image[0] ) ) {
 		return $image;
 	}
 
